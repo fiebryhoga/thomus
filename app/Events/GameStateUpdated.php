@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Models\GameRoom;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
@@ -9,22 +10,23 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
+// ShouldBroadcastNow memastikan data dikirim secara instan tanpa delay antrean (queue)
 class GameStateUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $roomId;
-    public $state;
+    public $room;
 
-    public function __construct($roomId, $state)
+    public function __construct(GameRoom $room)
     {
-        $this->roomId = $roomId;
-        $this->state = $state;
+        $this->room = $room;
     }
 
-    public function broadcastOn()
+    public function broadcastOn(): array
     {
-        // Sesuaikan dengan nama channel di frontend-mu
-        return new PresenceChannel('poker-room.' . $this->roomId);
+        // Harus sama dengan nama channel yang dilisten oleh React
+        return [
+            new PresenceChannel('poker-room.' . $this->room->room_id),
+        ];
     }
 }

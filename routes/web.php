@@ -3,7 +3,8 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PokerGameController;
+use App\Http\Controllers\GameController;
+use App\Models\GameRoom;
 use Inertia\Inertia;
 
 Route::get('/', function () {
@@ -14,32 +15,62 @@ Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-// Halaman Lobi & Room
+// Halaman Lobi
 Route::get('/poker-lobby', function () {
     return Inertia::render('ThomUs/PokerLobby');
 })->middleware(['auth', 'verified'])->name('poker.lobby');
 
-Route::get('/poker-room', function () {
-    return Inertia::render('ThomUs/PokerRoom');
-})->middleware(['auth', 'verified'])->name('poker.room');
+// Halaman Room (Hanya satu rute ini yang dipakai untuk masuk ruangan)
+
 
 Route::get('/poker-room/{room_id}', function ($room_id) {
-    return Inertia::render('ThomUs/PokerRoom', [
-        'roomId' => $room_id
-    ]);
-})->middleware(['auth', 'verified'])->name('poker.room.id');
+    $user = auth()->user();
 
+    // Cari atau buat ruangan
+    $room = \App\Models\GameRoom::where('room_id', $room_id)->first();
+
+    if (!$room) {
+        $room = \App\Models\GameRoom::create([
+            'room_id' => $room_id,
+            'host_id' => $user->id,
+            'status' => 'waiting',
+            'players_data' => []
+        ]);
+    }
+
+    // Ambil kartu milik pemain ini jika game sudah berjalan
+    $playersData = $room->players_data ?? [];
+    $myCards = $playersData[$user->id] ?? [];
+
+    return Inertia::render('ThomUs/PokerRoom', [
+        'roomId' => $room_id,
+        'hostId' => $room->host_id,
+        
+        // SUNTIKKAN DATA TERBARU DARI DATABASE KE REACT
+        'initialData' => [
+            'status' => $room->status,
+            'current_turn_id' => $room->current_turn_id,
+            'table_cards' => $room->table_cards ?? [],
+            'myCards' => $myCards,
+            'winner_id' => $room->winner_id,
+        ]
+    ]);
+})->middleware(['auth', 'verified'])->name('poker.room');
+
+// Halaman Coming Soon
 Route::get('/soon', function () {
     return Inertia::render('ThomUs/ComingSoon');
 })->middleware(['auth', 'verified'])->name('soon');
 
-// --- ROUTE UNTUK AKSI GAME (POST) ---
+// Rute API Logika Permainan
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::post('/poker-room/{room_id}/start', [PokerGameController::class, 'startGame']);
-    Route::post('/poker-room/{room_id}/play', [PokerGameController::class, 'playTurn']);
-    Route::post('/poker-room/{room_id}/skip', [PokerGameController::class, 'skipTurn']);
+    Route::post('/game/{roomId}/start', [GameController::class, 'startGame']);
+    Route::post('/game/{roomId}/clear-threes', [GameController::class, 'clearThrees']);
+    Route::post('/game/{roomId}/play', [GameController::class, 'playCards']);
+    Route::post('/game/{roomId}/skip', [GameController::class, 'skipTurn']);
 });
 
+// Rute Bawaan Laravel Breeze (Profile)
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
